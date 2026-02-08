@@ -33,6 +33,8 @@ $ npm install
 
 ## Compile and run the project
 
+**Requirements:** MongoDB (`MONGODB_URI`) and Redis (for queues: `REDIS_HOST`, `REDIS_PORT`; default `localhost:6379`).
+
 ```bash
 # development
 $ npm run start
@@ -43,6 +45,20 @@ $ npm run start:dev
 # production mode
 $ npm run start:prod
 ```
+
+### Worker (BullMQ consumer)
+
+Email draft generation runs asynchronously. The API only enqueues jobs; a separate worker process processes them.
+
+```bash
+# run worker (after build)
+$ npm run start:worker
+
+# run worker in dev (with .env)
+$ npm run start:worker:dev
+```
+
+Ensure Redis is running and use the same `REDIS_HOST` / `REDIS_PORT` and `MONGODB_URI` as the API.
 
 ## Run tests
 
