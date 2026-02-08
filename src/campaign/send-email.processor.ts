@@ -98,6 +98,7 @@ export class SendEmailProcessor extends WorkerHost {
         senderName: campaign?.settings?.senderName,
         leadId: leadIdObj,
         campaignId: campaignIdObj,
+        campaignLeadId: campaignLead._id,
       });
       await new Promise((resolve) => setTimeout(resolve, 1500)); // Throttle
     } else {
@@ -216,6 +217,7 @@ export class SendEmailProcessor extends WorkerHost {
       senderName: campaign?.settings?.senderName,
       leadId: leadIdObj,
       campaignId: campaignIdObj,
+      campaignLeadId: campaignLead._id,
     });
 
     await this.campaignLeadsModel

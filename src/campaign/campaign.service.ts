@@ -152,6 +152,43 @@ export class CampaignService {
     return campaignLead as CampaignLeads | null;
   }
 
+  /**
+   * Internal use: get a campaign lead by its _id (e.g. from inbound reply-to address cl-{id}@...).
+   */
+  async getCampaignLeadById(
+    campaignLeadId: Types.ObjectId,
+  ): Promise<CampaignLeads | null> {
+    if (!Types.ObjectId.isValid(campaignLeadId.toString())) {
+      return null;
+    }
+    const campaignLead = await this.campaignLeadsModel
+      .findById(campaignLeadId)
+      .select('campaignId leadId')
+      .lean()
+      .exec();
+    return campaignLead as CampaignLeads | null;
+  }
+
+  /**
+   * Marks a campaign lead as having received a reply. Used when an inbound webhook is processed.
+   */
+  async markReplyReceived(
+    campaignId: Types.ObjectId,
+    leadId: Types.ObjectId,
+  ): Promise<void> {
+    await this.campaignLeadsModel
+      .updateOne(
+        { campaignId, leadId },
+        {
+          $set: {
+            isReplyReceived: true,
+            replyReceivedAt: new Date(),
+          },
+        },
+      )
+      .exec();
+  }
+
   async findOne(
     campaignId: Types.ObjectId,
     userId: Types.ObjectId,

@@ -9,6 +9,17 @@ import { CampaignService } from '../campaign/campaign.service';
 const FROM_EMAIL = 'outreach@mail.followly.pro';
 const DEFAULT_FROM = `Followly <${FROM_EMAIL}>`;
 
+/**
+ * Builds Reply-To address that encodes the campaign-lead so inbound replies can be routed.
+ * Uses RESEND_REPLY_TO_DOMAIN (e.g. reply.followly.pro) to form campaignlead-{campaignLeadId}@domain.
+ * If RESEND_REPLY_TO_DOMAIN is not set, falls back to global RESEND_REPLY_TO when set.
+ */
+function getReplyTo(
+  campaignLeadId: Types.ObjectId | undefined,
+): string | undefined {
+  return `cl-${String(campaignLeadId)}@mail.followly.pro`;
+}
+
 function buildFrom(senderName?: string): string {
   if (senderName?.trim()) {
     return `${senderName.trim()} <${FROM_EMAIL}>`;
@@ -40,6 +51,8 @@ export interface SendEmailOptions {
   leadId: Types.ObjectId;
   /** Required to create an audit entry in the email collection. */
   campaignId: Types.ObjectId;
+  /** CampaignLeads document id; used to build per-campaign-lead Reply-To when RESEND_REPLY_TO_DOMAIN is set. */
+  campaignLeadId?: Types.ObjectId;
 }
 
 export interface SendFollowUpEmailOptions {
@@ -50,6 +63,8 @@ export interface SendFollowUpEmailOptions {
   senderName?: string;
   leadId: Types.ObjectId;
   campaignId: Types.ObjectId;
+  /** CampaignLeads document id; used to build per-campaign-lead Reply-To when RESEND_REPLY_TO_DOMAIN is set. */
+  campaignLeadId?: Types.ObjectId;
 }
 
 /** Lead-shaped document returned when populating leadId on Email. */
@@ -75,10 +90,19 @@ export class EmailService {
    * Sends an email and creates an entry in the email collection.
    */
   async sendEmail(options: SendEmailOptions): Promise<void> {
-    const { to, subject, html, senderName, leadId, campaignId } = options;
+    const {
+      to,
+      subject,
+      html,
+      senderName,
+      leadId,
+      campaignId,
+      campaignLeadId,
+    } = options;
     const from = buildFrom(senderName);
+    const replyTo = getReplyTo(campaignLeadId);
     // Signature is already included in the draft (see email-drafts.processor); do not append again.
-    await sendMail({ from, to, subject, html });
+    await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
 
     await this.emailModel.create({
       leadId,
@@ -106,10 +130,19 @@ export class EmailService {
    * Does not schedule further follow-ups. Use for the delayed follow-up send only.
    */
   async sendFollowUpEmail(options: SendFollowUpEmailOptions): Promise<void> {
-    const { to, subject, html, senderName, leadId, campaignId } = options;
+    const {
+      to,
+      subject,
+      html,
+      senderName,
+      leadId,
+      campaignId,
+      campaignLeadId,
+    } = options;
     const from = buildFrom(senderName);
+    const replyTo = getReplyTo(campaignLeadId);
     // Signature is included in draft; follow-up body is built in send-email.processor without re-appending.
-    await sendMail({ from, to, subject, html });
+    await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
 
     await this.emailModel.create({
       leadId,
@@ -176,6 +209,24 @@ export class EmailService {
       limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit) || 1,
     };
+  }
+
+  /**
+   * Creates an inbound email entry (e.g. from a webhook when a lead replies).
+   */
+  async createInboundEmail(options: {
+    leadId: Types.ObjectId;
+    campaignId: Types.ObjectId;
+    subject: string;
+    body: string;
+  }): Promise<void> {
+    await this.emailModel.create({
+      leadId: options.leadId,
+      campaignId: options.campaignId,
+      direction: EmailDirection.INBOUND,
+      subject: options.subject,
+      body: options.body,
+    });
   }
 
   /**
