@@ -6,7 +6,7 @@ process.env.TZ = 'UTC';
 /**
  * Email worker entry point: runs the send-email BullMQ consumer only (no HTTP server).
  * Start with: npm run start:worker:email
- * Requires REDIS_HOST/REDIS_PORT and MONGODB_URI (same as API).
+ * Requires REDIS_URL and MONGODB_URI (same as API).
  */
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(WorkerEmailModule, {

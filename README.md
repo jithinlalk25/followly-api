@@ -33,7 +33,7 @@ $ npm install
 
 ## Compile and run the project
 
-**Requirements:** MongoDB (`MONGODB_URI`) and Redis (for queues: `REDIS_HOST`, `REDIS_PORT`; default `localhost:6379`).
+**Requirements:** MongoDB (`MONGODB_URI`) and Redis (for queues: `REDIS_URL`).
 
 ```bash
 # development
@@ -58,7 +58,7 @@ $ npm run start:worker
 $ npm run start:worker:dev
 ```
 
-Ensure Redis is running and use the same `REDIS_HOST` / `REDIS_PORT` and `MONGODB_URI` as the API.
+Ensure Redis is running and use the same `REDIS_URL` and `MONGODB_URI` as the API.
 
 ## Run tests
 

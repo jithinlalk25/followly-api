@@ -19,10 +19,7 @@ import { EmailModule } from './email/email.module';
       autoIndex: true,
     }),
     BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST ?? 'localhost',
-        port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-      },
+      connection: { url: process.env.REDIS_URL! },
     }),
     BullModule.registerQueue(
       { name: EMAIL_DRAFTS_QUEUE, defaultJobOptions: DEFAULT_JOB_OPTIONS },
