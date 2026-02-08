@@ -182,6 +182,8 @@ export class CampaignService {
       status: CampaignLeadStatus;
       emailDraft: string | undefined;
       subjectDraft: string | undefined;
+      followupEmailDraft: string | undefined;
+      followupSubjectDraft: string | undefined;
     }>;
   }> {
     const campaign = await this.campaignModel
@@ -207,6 +209,8 @@ export class CampaignService {
         status: cl.status,
         emailDraft: cl.emailDraft,
         subjectDraft: cl.subjectDraft,
+        followupEmailDraft: cl.followupEmailDraft,
+        followupSubjectDraft: cl.followupSubjectDraft,
       })),
     };
   }
