@@ -19,6 +19,3 @@ export class Company extends Document {
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);
-
-// Lookup/upsert by user (company.service getCompanyByUserId, upsertCompany). Mongoose unique: true also creates an index; explicit for clarity.
-CompanySchema.index({ userId: 1 }, { unique: true });

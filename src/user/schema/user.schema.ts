@@ -13,6 +13,3 @@ export class User extends Document {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
-
-// Lookup by Clerk id (user.service getOrCreateByClerkUserId). Mongoose unique: true also creates an index; explicit for clarity.
-UserSchema.index({ clerkUserId: 1 }, { unique: true });
