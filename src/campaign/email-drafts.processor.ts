@@ -15,6 +15,7 @@ import {
 } from './constants/email-drafts-queue';
 import { Lead } from '../lead/schema/lead.schema';
 import { UserService } from '../user/user.service';
+import { CompanyService } from '../company/company.service';
 import { generateText } from '../../utils/openai.service';
 
 /**
@@ -32,6 +33,7 @@ export class EmailDraftsProcessor extends WorkerHost {
     private readonly campaignLeadsModel: Model<CampaignLeads>,
     @InjectModel(Lead.name) private readonly leadModel: Model<Lead>,
     private readonly userService: UserService,
+    private readonly companyService: CompanyService,
   ) {
     super();
   }
@@ -81,12 +83,20 @@ export class EmailDraftsProcessor extends WorkerHost {
       return;
     }
     const followUpEnabled = campaign.settings?.isFollowUpEnabled ?? false;
+    const company = await this.companyService.getCompanyByUserId(
+      campaign.userId,
+    );
     this.logger.log(
       `Building prompt for campaign=${campaignId} lead=${leadId} followUpEnabled=${followUpEnabled}`,
     );
     let prompt: string;
     try {
-      prompt = this.buildDraftPrompt(campaign, lead, followUpEnabled);
+      prompt = this.buildDraftPrompt(
+        campaign,
+        lead,
+        followUpEnabled,
+        company ?? undefined,
+      );
     } catch (err) {
       this.logger.error(
         `Error building prompt for campaign=${campaignId} lead=${leadId}: ${err}`,
@@ -128,20 +138,23 @@ export class EmailDraftsProcessor extends WorkerHost {
       subjectDraft,
       emailDraft,
     };
-    if (followUpEnabled && parsed.followupSubject != null && parsed.followupBody != null) {
+    if (
+      followUpEnabled &&
+      parsed.followupSubject != null &&
+      parsed.followupBody != null
+    ) {
       updatePayload.followupSubjectDraft = parsed.followupSubject.trim();
       updatePayload.followupEmailDraft = parsed.followupBody.trim();
     }
 
     await this.campaignLeadsModel
-      .updateOne(
-        { _id: campaignLead._id },
-        { $set: updatePayload },
-      )
+      .updateOne({ _id: campaignLead._id }, { $set: updatePayload })
       .exec();
 
     const draftCount =
-      followUpEnabled && parsed.followupSubject != null && parsed.followupBody != null
+      followUpEnabled &&
+      parsed.followupSubject != null &&
+      parsed.followupBody != null
         ? 2
         : 1;
     await this.userService.updateSummary(campaign.userId, {
@@ -185,7 +198,11 @@ export class EmailDraftsProcessor extends WorkerHost {
           followupSubject?: string;
           followupBody?: string;
         } = { subject, body };
-        if (expectFollowUp && 'followupSubject' in obj && 'followupBody' in obj) {
+        if (
+          expectFollowUp &&
+          'followupSubject' in obj &&
+          'followupBody' in obj
+        ) {
           result.followupSubject = String(
             (obj as { followupSubject: unknown }).followupSubject ?? '',
           ).trim();
@@ -220,8 +237,10 @@ export class EmailDraftsProcessor extends WorkerHost {
       additionalInfo: Record<string, string>;
     },
     followUpEnabled: boolean,
+    company?: { name?: string; website?: string; description?: string } | null,
   ): string {
     const tone = campaign?.settings?.tone ?? 'PROFESSIONAL';
+    /** Campaign description (product / value proposition) for the LLM context */
     const description = campaign?.settings?.description?.trim();
     const emailLength = campaign?.settings?.emailLength ?? 'SHORT';
     const campaignName = String(campaign?.name ?? '').trim() || 'Campaign';
@@ -239,9 +258,22 @@ export class EmailDraftsProcessor extends WorkerHost {
         ? `Additional recipient context (use only if relevant): ${JSON.stringify(additionalInfo)}`
         : '';
 
-    const productContext = description
-      ? `Product / Context you MAY reference (do not invent beyond this): ${description}`
+    const campaignDescription = description
+      ? `Campaign description you MAY reference (do not invent beyond this): ${description}`
       : '';
+
+    const companyName = company?.name?.trim();
+    const companyWebsite = company?.website?.trim();
+    const companyDescription = company?.description?.trim();
+    const companyParts: string[] = [];
+    if (companyName) companyParts.push(`Name: ${companyName}`);
+    if (companyWebsite) companyParts.push(`Website: ${companyWebsite}`);
+    if (companyDescription)
+      companyParts.push(`Description: ${companyDescription}`);
+    const senderCompanyContext =
+      companyParts.length > 0
+        ? `Sender's company (use for context; do not invent):\n${companyParts.join('\n')}`
+        : '';
 
     const signatureRule = signature
       ? `Use this exact signature at the end of the email:\n${signature}`
@@ -253,25 +285,33 @@ export class EmailDraftsProcessor extends WorkerHost {
 
     const followUpInstructions = followUpEnabled
       ? `
+  ### FOLLOW-UP EMAIL GUIDELINES
   Also provide a follow-up email (followupSubject and followupBody). The follow-up will be sent only if the recipient has NOT replied. It should:
   - Be a gentle, friendly reminder (same tone and length as above).
   - Reference the initial outreach without repeating it verbatim.
   - Include a clear, low-friction ask (e.g. "Would you have a few minutes to connect?").
-  - ${signatureRule}
-  - Be concise and respectful.`
+  - ${signatureRule}`
       : '';
 
     return `
-  You are writing a personalized sales outreach email.
+  You are writing a personalized sales outreach email on behalf of the Sales Development Representative from their company.
   
-  Campaign: "${campaignName}"
-  Goal: outreach
+  ### SALES DEVELOPMENT REPRESENTATIVE COMPANY INFORMATION
+  ${senderCompanyContext}
+
+  ### CAMPAIGN INFORMATION
+  This email is part of a campaign to outreach to potential customers.
+  Campaign name: ${campaignName}
+  ${campaignDescription}
+
+  ### EMAIL CONTENT GUIDELINES
   Tone: ${tone}
   Length: ${emailLength}
-  
-  Recipient: ${leadName} (${leadEmail})
+
+  ### RECIPIENT INFORMATION
+  Recipient name: ${leadName}
+  Recipient email: ${leadEmail}
   ${additionalContext}
-  ${productContext}
   
   CRITICAL RULES (MUST FOLLOW):
   - Do NOT invent a sender name, company name, product, role, or background.
@@ -280,13 +320,12 @@ export class EmailDraftsProcessor extends WorkerHost {
   - If product or company context is missing, write a neutral, permission-based outreach.
   - Do NOT assume the recipient’s needs, tools, or priorities.
   - ${signatureRule}
+
   ${followUpInstructions}
   
   Respond with valid JSON only, no other text.
   Use exactly this shape:
   ${jsonShape}
-  
-  Keep the email concise, professional, and respectful.
   `.trim();
   }
 

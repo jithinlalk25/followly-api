@@ -11,6 +11,7 @@ import {
 import { Lead, LeadSchema } from '../lead/schema/lead.schema';
 import { EmailDraftsProcessor } from '../campaign/email-drafts.processor';
 import { UserModule } from '../user/user.module';
+import { CompanyModule } from '../company/company.module';
 
 /**
  * Worker module: runs as a separate process (see worker-main.ts).
@@ -33,6 +34,7 @@ import { UserModule } from '../user/user.module';
       { name: Lead.name, schema: LeadSchema },
     ]),
     UserModule,
+    CompanyModule,
   ],
   providers: [EmailDraftsProcessor],
 })
