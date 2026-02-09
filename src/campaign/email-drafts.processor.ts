@@ -14,6 +14,7 @@ import {
   GenerateEmailDraftsJobPayload,
 } from './constants/email-drafts-queue';
 import { Lead } from '../lead/schema/lead.schema';
+import { UserService } from '../user/user.service';
 import { generateText } from '../../utils/openai.service';
 
 /**
@@ -30,6 +31,7 @@ export class EmailDraftsProcessor extends WorkerHost {
     @InjectModel(CampaignLeads.name)
     private readonly campaignLeadsModel: Model<CampaignLeads>,
     @InjectModel(Lead.name) private readonly leadModel: Model<Lead>,
+    private readonly userService: UserService,
   ) {
     super();
   }
@@ -137,6 +139,14 @@ export class EmailDraftsProcessor extends WorkerHost {
         { $set: updatePayload },
       )
       .exec();
+
+    const draftCount =
+      followUpEnabled && parsed.followupSubject != null && parsed.followupBody != null
+        ? 2
+        : 1;
+    await this.userService.updateSummary(campaign.userId, {
+      emailDraftsCount: draftCount,
+    });
 
     this.logger.log(
       `Draft generated for campaign=${campaignId} lead=${leadId}`,

@@ -3,11 +3,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Lead } from './schema/lead.schema';
 import { AddLeadItemDto } from './dto/add-leads.dto';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class LeadService {
   constructor(
     @InjectModel(Lead.name) private readonly leadModel: Model<Lead>,
+    private readonly userService: UserService,
   ) {}
 
   async addLeads(
@@ -15,14 +17,33 @@ export class LeadService {
     items: AddLeadItemDto[],
   ): Promise<Lead[]> {
     if (items.length === 0) return [];
-    const docs = items.map((item) => ({
-      name: item.name,
-      email: item.email,
-      additionalInfo: item.additionalInfo,
-      userId,
+    const ops = items.map((item) => ({
+      updateOne: {
+        filter: { userId, email: item.email },
+        update: {
+          $set: {
+            name: item.name,
+            additionalInfo: item.additionalInfo,
+          },
+        },
+        upsert: true,
+      },
     }));
-    const created = await this.leadModel.insertMany(docs);
-    return created;
+    const result = await this.leadModel.bulkWrite(ops);
+    const insertedCount = result.upsertedCount ?? 0;
+    if (insertedCount > 0) {
+      await this.userService.updateSummary(userId, {
+        leadCount: insertedCount,
+      });
+    }
+    const leads = await this.leadModel
+      .find({
+        userId,
+        email: { $in: items.map((i) => i.email) },
+      })
+      .lean()
+      .exec();
+    return leads as Lead[];
   }
 
   async getSummary(userId: Types.ObjectId): Promise<{ count: number }> {

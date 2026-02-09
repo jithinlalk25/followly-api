@@ -10,6 +10,7 @@ import {
 } from '../campaign/schema/campaign-leads.schema';
 import { Lead, LeadSchema } from '../lead/schema/lead.schema';
 import { EmailDraftsProcessor } from '../campaign/email-drafts.processor';
+import { UserModule } from '../user/user.module';
 
 /**
  * Worker module: runs as a separate process (see worker-main.ts).
@@ -31,6 +32,7 @@ import { EmailDraftsProcessor } from '../campaign/email-drafts.processor';
       { name: CampaignLeads.name, schema: CampaignLeadsSchema },
       { name: Lead.name, schema: LeadSchema },
     ]),
+    UserModule,
   ],
   providers: [EmailDraftsProcessor],
 })

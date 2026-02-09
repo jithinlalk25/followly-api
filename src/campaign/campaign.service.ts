@@ -105,6 +105,8 @@ export class CampaignService {
       })),
     );
 
+    await this.userService.updateSummary(userId, { campaignCount: 1 });
+
     return campaign;
   }
 

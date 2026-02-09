@@ -5,6 +5,7 @@ import { sendMail } from 'utils/resend.service';
 import { Email, EmailDirection } from './schema/email.schema';
 import { LeadService } from '../lead/lead.service';
 import { CampaignService } from '../campaign/campaign.service';
+import { UserService } from '../user/user.service';
 
 const FROM_EMAIL = 'outreach@mail.followly.pro';
 const DEFAULT_FROM = `Followly <${FROM_EMAIL}>`;
@@ -84,6 +85,7 @@ export class EmailService {
     @InjectModel(Email.name) private readonly emailModel: Model<Email>,
     private readonly leadService: LeadService,
     private readonly campaignService: CampaignService,
+    private readonly userService: UserService,
   ) {}
 
   /**
@@ -123,6 +125,14 @@ export class EmailService {
     if (isFollowUpEnabled && !campaignLead?.isFollowUpEmailSent) {
       await this.campaignService.scheduleFollowUpEmail(campaignId, leadId);
     }
+
+    const campaign =
+      await this.campaignService.getCampaignByIdInternal(campaignId);
+    if (campaign?.userId) {
+      await this.userService.updateSummary(campaign.userId, {
+        emailSentCount: 1,
+      });
+    }
   }
 
   /**
@@ -151,6 +161,14 @@ export class EmailService {
       subject,
       body: html,
     });
+
+    const campaign =
+      await this.campaignService.getCampaignByIdInternal(campaignId);
+    if (campaign?.userId) {
+      await this.userService.updateSummary(campaign.userId, {
+        emailSentCount: 1,
+      });
+    }
   }
 
   /**
@@ -213,6 +231,7 @@ export class EmailService {
 
   /**
    * Creates an inbound email entry (e.g. from a webhook when a lead replies).
+   * Increments the user summary emailReceivedCount.
    */
   async createInboundEmail(options: {
     leadId: Types.ObjectId;
@@ -227,6 +246,14 @@ export class EmailService {
       subject: options.subject,
       body: options.body,
     });
+
+    const campaign =
+      await this.campaignService.getCampaignByIdInternal(options.campaignId);
+    if (campaign?.userId) {
+      await this.userService.updateSummary(campaign.userId, {
+        emailReceivedCount: 1,
+      });
+    }
   }
 
   /**
