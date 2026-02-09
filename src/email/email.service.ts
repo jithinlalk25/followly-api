@@ -5,6 +5,7 @@ import { sendMail } from 'utils/resend.service';
 import { Email, EmailDirection } from './schema/email.schema';
 import { LeadService } from '../lead/lead.service';
 import { CampaignService } from '../campaign/campaign.service';
+import { CampaignLeads } from '../campaign/schema/campaign-leads.schema';
 import { UserService } from '../user/user.service';
 import { CompanyService } from '../company/company.service';
 
@@ -68,6 +69,19 @@ export interface SendFollowUpEmailOptions {
   /** CampaignLeads document id; used to build per-campaign-lead Reply-To when RESEND_REPLY_TO_DOMAIN is set. */
   campaignLeadId?: Types.ObjectId;
 }
+
+/** Email document as returned by getEmailsByLead (lean + populated campaignId + campaignLead). */
+export type EmailWithCampaignLead = {
+  _id: Types.ObjectId;
+  leadId: Types.ObjectId;
+  campaignId: Types.ObjectId | { _id: Types.ObjectId };
+  direction: EmailDirection;
+  subject: string;
+  body: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  campaignLead: CampaignLeads | null;
+};
 
 /** Lead-shaped document returned when populating leadId on Email. */
 export interface LeadPopulated {
@@ -289,21 +303,38 @@ export class EmailService {
 
   /**
    * Returns all emails for a lead. Only returns data if the lead exists and belongs to the given user.
+   * Each item includes a `campaignLead` attribute with the CampaignLeads document for that email's campaign/lead.
    */
   async getEmailsByLead(
     leadId: Types.ObjectId,
     userId: Types.ObjectId,
-  ): Promise<{ data: Email[] }> {
+  ): Promise<{ data: EmailWithCampaignLead[] }> {
     const lead = await this.leadService.findOneByIdAndUserId(leadId, userId);
     if (!lead) {
       throw new NotFoundException('Lead not found');
     }
-    const data = await this.emailModel
-      .find({ leadId })
-      .sort({ createdAt: -1 })
-      .populate('campaignId')
-      .lean()
-      .exec();
+    const [emails, campaignLeads] = await Promise.all([
+      this.emailModel
+        .find({ leadId })
+        .sort({ createdAt: -1 })
+        .populate('campaignId')
+        .lean()
+        .exec(),
+      this.campaignService.getCampaignLeadsByLeadId(leadId),
+    ]);
+    const campaignLeadByCampaignId = new Map(
+      campaignLeads.map((cl) => [cl.campaignId.toString(), cl]),
+    );
+    const data: EmailWithCampaignLead[] = emails.map((email) => {
+      const campaignId =
+        typeof email.campaignId === 'object' && email.campaignId !== null
+          ? (email.campaignId as { _id: Types.ObjectId })._id
+          : (email.campaignId as Types.ObjectId);
+      const campaignLead = campaignId
+        ? campaignLeadByCampaignId.get(campaignId.toString()) ?? null
+        : null;
+      return { ...email, campaignLead } as EmailWithCampaignLead;
+    });
     return { data };
   }
 }

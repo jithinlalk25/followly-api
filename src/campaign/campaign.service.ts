@@ -172,6 +172,22 @@ export class CampaignService {
   }
 
   /**
+   * Internal use: get all campaign leads for a given lead (e.g. to attach to emails by lead).
+   */
+  async getCampaignLeadsByLeadId(
+    leadId: Types.ObjectId,
+  ): Promise<CampaignLeads[]> {
+    if (!Types.ObjectId.isValid(leadId.toString())) {
+      return [];
+    }
+    const campaignLeads = await this.campaignLeadsModel
+      .find({ leadId })
+      .lean()
+      .exec();
+    return campaignLeads as CampaignLeads[];
+  }
+
+  /**
    * Marks a campaign lead as having received a reply and sets lead status to COMPLETED.
    * Used when an inbound webhook is processed. Then tries to mark the campaign COMPLETED if all leads are done.
    */
