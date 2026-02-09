@@ -172,7 +172,8 @@ export class CampaignService {
   }
 
   /**
-   * Marks a campaign lead as having received a reply. Used when an inbound webhook is processed.
+   * Marks a campaign lead as having received a reply and sets lead status to COMPLETED.
+   * Used when an inbound webhook is processed. Then tries to mark the campaign COMPLETED if all leads are done.
    */
   async markReplyReceived(
     campaignId: Types.ObjectId,
@@ -185,10 +186,35 @@ export class CampaignService {
           $set: {
             isReplyReceived: true,
             replyReceivedAt: new Date(),
+            status: CampaignLeadStatus.COMPLETED,
           },
         },
       )
       .exec();
+    await this.tryMarkCampaignCompletedIfAllLeadsDone(campaignId);
+  }
+
+  /**
+   * If no lead has status other than COMPLETED, mark the campaign as COMPLETED.
+   */
+  async tryMarkCampaignCompletedIfAllLeadsDone(
+    campaignId: Types.ObjectId,
+  ): Promise<void> {
+    const hasIncompleteLead = await this.campaignLeadsModel
+      .exists({
+        campaignId,
+        status: { $ne: CampaignLeadStatus.COMPLETED },
+      })
+      .exec();
+
+    if (!hasIncompleteLead) {
+      await this.campaignModel
+        .updateOne(
+          { _id: campaignId },
+          { $set: { status: CampaignStatus.COMPLETED } },
+        )
+        .exec();
+    }
   }
 
   async findOne(
@@ -235,7 +261,9 @@ export class CampaignService {
     }
     const campaignLeads = await this.campaignLeadsModel
       .find({ campaignId })
-      .select('leadId status emailDraft subjectDraft')
+      .select(
+        'leadId status emailDraft subjectDraft followupEmailDraft followupSubjectDraft',
+      )
       .lean()
       .exec();
     return {
@@ -421,6 +449,10 @@ function followUpDelayToMs(delay: FollowUpDelay): number {
   switch (delay) {
     case FollowUpDelay.ONE_MINUTE:
       return minute;
+    case FollowUpDelay.THREE_MINUTES:
+      return 3 * minute;
+    case FollowUpDelay.FIVE_MINUTES:
+      return 5 * minute;
     case FollowUpDelay.TWO_DAYS:
       return 2 * day;
     case FollowUpDelay.SEVEN_DAYS:

@@ -6,6 +6,7 @@ import { EmailService } from './email.service';
 import { Email, EmailSchema } from './schema/email.schema';
 import { LeadModule } from '../lead/lead.module';
 import { CampaignModule } from '../campaign/campaign.module';
+import { CompanyModule } from '../company/company.module';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
 
@@ -14,6 +15,7 @@ import { UserModule } from '../user/user.module';
     MongooseModule.forFeature([{ name: Email.name, schema: EmailSchema }]),
     LeadModule,
     CampaignModule,
+    CompanyModule,
     AuthModule,
     UserModule,
   ],

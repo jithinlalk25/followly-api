@@ -6,6 +6,7 @@ import { Email, EmailDirection } from './schema/email.schema';
 import { LeadService } from '../lead/lead.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { UserService } from '../user/user.service';
+import { CompanyService } from '../company/company.service';
 
 const FROM_EMAIL = 'outreach@mail.followly.pro';
 const DEFAULT_FROM = `Followly <${FROM_EMAIL}>`;
@@ -86,10 +87,27 @@ export class EmailService {
     private readonly leadService: LeadService,
     private readonly campaignService: CampaignService,
     private readonly userService: UserService,
+    private readonly companyService: CompanyService,
   ) {}
 
   /**
+   * Returns true if the recipient is allowed to receive actual outbound email (testing allowlist).
+   * If company has no allowlist, no one is allowed (safe default for testing).
+   */
+  private async shouldSendActualEmail(
+    userId: Types.ObjectId,
+    to: string,
+  ): Promise<boolean> {
+    const company = await this.companyService.getCompanyByUserId(userId);
+    const list = company?.allowedEmailRecipients;
+    if (!list || list.length === 0) return false;
+    const normalized = to.trim().toLowerCase();
+    return list.some((e) => e.trim().toLowerCase() === normalized);
+  }
+
+  /**
    * Sends an email and creates an entry in the email collection.
+   * If company has an allowedEmailRecipients list (testing), only sends actual email when recipient is in the list; otherwise skips send silently.
    */
   async sendEmail(options: SendEmailOptions): Promise<void> {
     const {
@@ -101,10 +119,18 @@ export class EmailService {
       campaignId,
       campaignLeadId,
     } = options;
-    const from = buildFrom(senderName);
-    const replyTo = getReplyTo(campaignLeadId);
-    // Signature is already included in the draft (see email-drafts.processor); do not append again.
-    await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
+    const campaign =
+      await this.campaignService.getCampaignByIdInternal(campaignId);
+    const shouldSend =
+      campaign?.userId &&
+      (await this.shouldSendActualEmail(campaign.userId, to));
+
+    if (shouldSend) {
+      const from = buildFrom(senderName);
+      const replyTo = getReplyTo(campaignLeadId);
+      // Signature is already included in the draft (see email-drafts.processor); do not append again.
+      await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
+    }
 
     await this.emailModel.create({
       leadId,
@@ -126,8 +152,6 @@ export class EmailService {
       await this.campaignService.scheduleFollowUpEmail(campaignId, leadId);
     }
 
-    const campaign =
-      await this.campaignService.getCampaignByIdInternal(campaignId);
     if (campaign?.userId) {
       await this.userService.updateSummary(campaign.userId, {
         emailSentCount: 1,
@@ -138,6 +162,7 @@ export class EmailService {
   /**
    * Sends a follow-up email and creates an entry in the email collection.
    * Does not schedule further follow-ups. Use for the delayed follow-up send only.
+   * If company has an allowedEmailRecipients list (testing), only sends actual email when recipient is in the list; otherwise skips send silently.
    */
   async sendFollowUpEmail(options: SendFollowUpEmailOptions): Promise<void> {
     const {
@@ -149,10 +174,18 @@ export class EmailService {
       campaignId,
       campaignLeadId,
     } = options;
-    const from = buildFrom(senderName);
-    const replyTo = getReplyTo(campaignLeadId);
-    // Signature is included in draft; follow-up body is built in send-email.processor without re-appending.
-    await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
+    const campaign =
+      await this.campaignService.getCampaignByIdInternal(campaignId);
+    const shouldSend =
+      campaign?.userId &&
+      (await this.shouldSendActualEmail(campaign.userId, to));
+
+    if (shouldSend) {
+      const from = buildFrom(senderName);
+      const replyTo = getReplyTo(campaignLeadId);
+      // Signature is included in draft; follow-up body is built in send-email.processor without re-appending.
+      await sendMail({ from, to, subject, html, ...(replyTo && { replyTo }) });
+    }
 
     await this.emailModel.create({
       leadId,
@@ -162,8 +195,6 @@ export class EmailService {
       body: html,
     });
 
-    const campaign =
-      await this.campaignService.getCampaignByIdInternal(campaignId);
     if (campaign?.userId) {
       await this.userService.updateSummary(campaign.userId, {
         emailSentCount: 1,

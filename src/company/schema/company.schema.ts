@@ -16,6 +16,13 @@ export class Company extends Document {
 
   @Prop()
   description: string;
+
+  /**
+   * Testing: only these recipient emails receive actual outbound sends.
+   * If set, any recipient not in this list is skipped silently (no email sent, rest of flow unchanged).
+   */
+  @Prop({ type: [String], default: [] })
+  allowedEmailRecipients?: string[];
 }
 
 export const CompanySchema = SchemaFactory.createForClass(Company);

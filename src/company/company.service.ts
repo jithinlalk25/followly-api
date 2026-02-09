@@ -19,18 +19,16 @@ export class CompanyService {
     userId: Types.ObjectId,
     dto: UpdateCompanyDto,
   ): Promise<Company> {
+    const set: Record<string, unknown> = {
+      name: dto.name,
+      website: dto.website,
+      description: dto.description,
+    };
+    if (dto.allowedEmailRecipients !== undefined) {
+      set.allowedEmailRecipients = dto.allowedEmailRecipients;
+    }
     const company = await this.companyModel
-      .findOneAndUpdate(
-        { userId },
-        {
-          $set: {
-            name: dto.name,
-            website: dto.website,
-            description: dto.description,
-          },
-        },
-        { new: true, upsert: true },
-      )
+      .findOneAndUpdate({ userId }, { $set: set }, { new: true, upsert: true })
       .exec();
     return company;
   }

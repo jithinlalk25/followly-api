@@ -4,6 +4,8 @@ import { Document, Types } from 'mongoose';
 /** Follow-up delay in minutes. Use enum for allowed values. */
 export enum FollowUpDelay {
   ONE_MINUTE = 'ONE_MINUTE',
+  THREE_MINUTES = 'THREE_MINUTES',
+  FIVE_MINUTES = 'FIVE_MINUTES',
   TWO_DAYS = 'TWO_DAYS',
   SEVEN_DAYS = 'SEVEN_DAYS',
   FOURTEEN_DAYS = 'FOURTEEN_DAYS',
