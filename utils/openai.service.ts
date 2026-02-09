@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 
-const defaultModel = 'gpt-5-mini';
+const defaultModel = process.env.OPENAI_MODEL;
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {
